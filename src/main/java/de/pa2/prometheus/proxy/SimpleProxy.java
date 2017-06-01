@@ -30,6 +30,7 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerResponse;
 
 public class SimpleProxy {
+	private static final int SERVER_PORT = 18080;
 	private static final Logger LOG = LoggerFactory.getLogger(SimpleProxy.class);
 
 	private static class ProxyConfiguration {
@@ -323,7 +324,7 @@ public class SimpleProxy {
 			}
 		});
 
-		server.listen(18080);
+		server.listen(SERVER_PORT);
 	}
 
 	private static Integer findRandomOpenPortOnAllLocalInterfaces() throws IOException {

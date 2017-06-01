@@ -1,0 +1,13 @@
+FROM java:openjdk-8-jdk-alpine
+MAINTAINER Patrick Stricker https://github.com/pie-ai/
+
+RUN mkdir -p /srv/prometheus-proxy/lib 
+RUN mkdir -p /srv/prometheus-proxy/conf 
+COPY prometheus-proxy.jar /srv/prometheus-proxy/lib/prometheus-proxy.jar
+COPY config/ /srv/prometheus-proxy/conf/
+COPY prometheus-proxy.sh /srv/prometheus-proxy/prometheus-proxy.sh
+VOLUME /srv/prometheus-proxy/conf
+
+EXPOSE 18080
+
+ENTRYPOINT ["/srv/prometheus-proxy/prometheus-proxy.sh"]

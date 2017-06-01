@@ -1,0 +1,8 @@
+FROM maven:3-jdk-8-alpine
+RUN mkdir -p /usr/src/
+COPY . /usr/src/
+WORKDIR /usr/src/
+RUN find
+RUN mvn install
+RUN find target
+RUN cp target/*jar-with-dependencies.jar /prometheus-proxy.jar
