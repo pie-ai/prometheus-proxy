@@ -1,17 +1,11 @@
 package de.pa2.prometheus.proxy;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 
 import org.slf4j.Logger;
@@ -57,10 +51,12 @@ public class SimpleProxy {
 		}
 
 		private Properties properties = null;
+		private File baseDirectory = null;
 
-		public ProxyConfiguration(Properties properties) {
+		public ProxyConfiguration(Properties properties, File baseDirectory) {
 			super();
 			this.properties = properties;
+			this.baseDirectory = baseDirectory;
 		}
 
 		public String getUrl() {
@@ -92,7 +88,17 @@ public class SimpleProxy {
 		 * @return
 		 */
 		public String getKey() {
-			return this.properties.getProperty("key");
+			String key = this.properties.getProperty("key", null);
+			if (key != null) {
+				if (!new File(key).exists()) {
+					File tmp = new File(this.baseDirectory, key);
+					if (tmp.exists()) {
+						key = tmp.getAbsolutePath();
+					}
+				}
+			}
+
+			return key;
 		}
 
 		/**
@@ -130,7 +136,7 @@ public class SimpleProxy {
 					Properties properties = new Properties();
 					is = new FileInputStream(cfgFile);
 					properties.load(is);
-					return new ProxyConfiguration(properties);
+					return new ProxyConfiguration(properties, cfg);
 				} catch (IOException e) {
 					LOG.error("could not read properties: {}", e.getMessage(), e);
 				} finally {
@@ -179,7 +185,6 @@ public class SimpleProxy {
 						HttpClient client = vertx.createHttpClient(new HttpClientOptions());
 						HttpClientRequest clientRequest = client.request(req.method(), uri.getPort(), uri.getHost(),
 								uri.getPath(), clientResponse -> {
-									req.response().setChunked(true);
 									req.response().setStatusCode(clientResponse.statusCode());
 									req.response().headers().setAll(clientResponse.headers());
 									clientResponse.handler(data -> {
@@ -198,16 +203,11 @@ public class SimpleProxy {
 					} else if (proxyConfiguration
 							.getMode() == de.pa2.prometheus.proxy.SimpleProxy.ProxyConfiguration.Mode.SSH_AND_HTTP) {
 						// connect to remote server
-						Session session = null;
 						try {
 							LOG.debug("connecting to {} via ssh", proxyConfiguration.getHost());
 							JSch jsch = new JSch();
 							jsch.addIdentity(proxyConfiguration.getKey());
-							// final Session session =
-							// jsch.getSession(proxyConfiguration.getUser(),
-							// proxyConfiguration.getHost(),
-							// proxyConfiguration.getPort());
-							session = jsch.getSession(proxyConfiguration.getUser(), proxyConfiguration.getHost(),
+							final Session session =  jsch.getSession(proxyConfiguration.getUser(), proxyConfiguration.getHost(),
 									proxyConfiguration.getPort());
 							session.setConfig("StrictHostKeyChecking", "no");
 							LOG.debug("...");
@@ -233,71 +233,33 @@ public class SimpleProxy {
 
 							LOG.debug("requesting local uri: {}", localUri);
 
-							// HttpClient client = vertx.createHttpClient(new
-							// HttpClientOptions());
-							// HttpClientRequest clientRequest =
-							// client.request(req.method(), localUri.getPort(),
-							// localUri.getHost(), localUri.getPath(),
-							// clientResponse -> {
-							// LOG.debug("handle client response: {}",
-							// clientResponse);
-							// req.response().setChunked(true);
-							// req.response().setStatusCode(clientResponse.statusCode());
-							// req.response().headers().setAll(clientResponse.headers());
-							// clientResponse.handler(data -> {
-							// req.response().write(data);
-							// });
-							// clientResponse.endHandler((v) ->
-							// req.response().end());
-							// }
-							//
-							// );
-							// clientRequest.setChunked(true);
-							// clientRequest.headers().setAll(req.headers());
-							// req.handler(data -> {
-							// clientRequest.write(data);
-							// });
-							//
-							// req.endHandler((v) -> {
-							// clientRequest.end();
-							// if (session != null && session.isConnected()) {
-							// session.disconnect();
-							// }
-							// });
+							HttpClient client = vertx.createHttpClient(new HttpClientOptions());
+							HttpClientRequest clientRequest = client.request(req.method(), localUri.getPort(),
+									localUri.getHost(), localUri.getPath(), clientResponse -> {
+										LOG.debug("handle client response: {}", clientResponse);
+										req.response().setStatusCode(clientResponse.statusCode());
+										req.response().headers().setAll(clientResponse.headers());
+										clientResponse.handler(data -> {
+											req.response().write(data);
+										});
+										clientResponse.endHandler((v) -> req.response().end());
+									}
 
-							URL url = new URL(localUri.toString());
-							HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-							conn.setRequestMethod("GET");
-							BufferedReader rd = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-							Map<String, List<String>> headers = conn.getHeaderFields();
-
-							for (String headerName : headers.keySet()) {
-								if (headerName != null) {
-									req.response().putHeader(headerName, headers.get(headerName));
+							);
+							clientRequest.setChunked(true);
+							clientRequest.headers().setAll(req.headers());
+							req.handler(data -> {
+								clientRequest.write(data);
+								if (session != null && session.isConnected()) {
+									session.disconnect();
 								}
-							}
-							StringBuilder buf = new StringBuilder();
-							String line;
+							});
 
-							while ((line = rd.readLine()) != null) {
-								if (buf.length() > 0) {
-									buf.append("\n");
-								}
-								buf.append(line);
-							}
-							response.setStatusCode(conn.getResponseCode());
-							response.putHeader("content-type", conn.getContentType());
-							response.setChunked(true);
-							response.write(buf.toString());
-							rd.close();
-							response.end();
-
+							req.endHandler((v) -> {
+								clientRequest.end();
+							});
 						} catch (JSchException | IOException | URISyntaxException e) {
 							LOG.error("error in connection: " + e.getMessage(), e);
-						} finally {
-							if (session != null && session.isConnected()) {
-								session.disconnect();
-							}
 						}
 					} else {
 						LOG.error("unhandled mode: {}", proxyConfiguration.getMode());
@@ -305,9 +267,7 @@ public class SimpleProxy {
 						response.setChunked(true);
 						response.write("unhandled mode: " + proxyConfiguration.getMode());
 						response.end();
-
 					}
-
 				} else {
 					LOG.error("configuration not found: {}", configuration);
 					response.setStatusCode(404);
@@ -315,12 +275,60 @@ public class SimpleProxy {
 					response.write("not found");
 					response.end();
 				}
-			} else {
-				LOG.error("not a metric request: {}", req.uri());
+			} else if ("/".equals(req.uri())) {
+				StringBuilder body = new StringBuilder();
+				body.append("<html><h1>configurations</h1><ul>");
+				for (String directory : configDir.list()) {
+					body.append("<li><a href=\"").append(directory).append("/\">").append(directory)
+							.append("</a></li>");
+				}
+				body.append("</ul></html>");
+
+				response.setStatusCode(200);
+				response.setChunked(true);
+				response.putHeader("Content-type", "text/html");
+				response.write(body.toString());
+				response.end();
+			} 
+			else if ("/favicon.ico".equals(req.uri()))
+			{
 				response.setStatusCode(404);
 				response.setChunked(true);
 				response.write("not found");
 				response.end();
+			}
+			else {
+				// TODO validate to not allow path traversal attacks
+				String configuration = req.uri();
+
+				LOG.debug("using configuration: {}", configuration);
+				ProxyConfiguration proxyConfiguration = getConfiguration(configDir, configuration);
+				if (proxyConfiguration != null) {
+					StringBuilder body = new StringBuilder();
+					body.append("<html><h1>").append(configuration).append("</h1><ul>");
+					body.append("<li><a href=\"metrics\">metrics</a></li>");
+					body.append("</ul></html>");
+
+					response.setStatusCode(200);
+					response.setChunked(true);
+					response.putHeader("Content-type", "text/html");
+					response.write(body.toString());
+					response.end();
+				} else {
+					StringBuilder body = new StringBuilder();
+					body.append("<html><h1>configurations</h1><ul>");
+					for (String directory : new File(configDir, configuration).list()) {
+						body.append("<li><a href=\"").append(directory).append("/\">").append(directory)
+								.append("</a></li>");
+					}
+					body.append("</ul></html>");
+
+					response.setStatusCode(200);
+					response.setChunked(true);
+					response.putHeader("Content-type", "text/html");
+					response.write(body.toString());
+					response.end();
+				}
 			}
 		});
 
