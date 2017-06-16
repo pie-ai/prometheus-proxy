@@ -29,7 +29,7 @@ prometheus.yml
           group: 'nodes'
 ```
 ### Proxy Configuration
-/config/remote-application.de/configuration.properties
+/config/live/remote-application.de/configuration.properties
 ```
 mode=ssh+http
 host=123.123.123.123
