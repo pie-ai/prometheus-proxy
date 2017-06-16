@@ -11,10 +11,32 @@ At the moment there are following implementations:
 * http: intergrate remote url locally (for example http://demo.robustperception.io:9100/metrics)
 * ssh+http: connect to remote ssh server and integrate http://127.0.0.1:9100/metrics
 
-During development I learned a lot about prometheus, I hope that helps someone else ;-)
+During development I learned a lot about prometheus, I hope that helps someone else ;-) Corrections or enhancements? Pull requests are welcome!
 
 
 ## Example
+### Build and Run
+```
+$ git clone https://github.com/pie-ai/prometheus-proxy.git
+$ cd prometheus-proxy
+```
+#### using docker
+```
+$ ./build.sh
+...
+Successfully tagged de.pa2.prometheus/proxy:latest
+$ PWD=$(pwd)
+$ docker run -d -p 18080:18080 -v/srv/prometheus-proxy/conf:${PWD}/config de.pa2.prometheus/proxy:latest
+```
+and open http://localhost:18080
+
+#### using maven / java (8)
+```
+$ mvn clean install
+$ PWD=$(pwd)
+$ java -jar target/prometheus-proxy.jar ${PWD}/config
+```
+
 ### Prometheus configuration
 prometheus.yml
 ```
