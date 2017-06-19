@@ -1,9 +1,11 @@
 # prometheus-proxy
 proxy http server that fetched prometheus metrics remotely
 
-To connect remote servers, running
+To connect remote servers, running for example
 * Container Exporter https://github.com/docker-infra/container_exporter
 * cAdvisor https://github.com/google/cadvisor
+* or any other prometheus data source.
+
 
 you may not be able to connect directly. This little dirty proxy creates a frontend for multiple prometheus backends locally.
 
