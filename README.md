@@ -51,6 +51,9 @@ prometheus.yml
       - targets: ['prometheus-proxy.docker.internal']
         labels:
           group: 'nodes'
+    relabel_configs:
+    - source_labels: ['job']
+      target_label: 'instance'
 ```
 ### Proxy Configuration
 /config/live/remote-application.de/configuration.properties
